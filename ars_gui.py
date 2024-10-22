@@ -1,14 +1,15 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 import numpy as np
 import time
+import os
 
 class SpectrometerGUI(tk.Tk):
     def __init__(self, spectrometer):
         super().__init__()
         self.spectrometer = spectrometer
         self.title("Angle-Resolved Spectrometer Control")
-        self.geometry("600x500")
+        self.geometry("1000x800")
 
         # Specular vs. Uncoupled mode
         self.mode = tk.StringVar(value="specular")
@@ -22,6 +23,33 @@ class SpectrometerGUI(tk.Tk):
 
         # Tree representation of scan configuration
         self.create_scan_tree()
+
+        # File saving options
+        self.create_file_saving()
+
+    def create_file_saving(self):
+        '''Create a frame for selecting a folder to save the data to'''
+        self.file_frame = ttk.LabelFrame(self, text="File Saving", padding=(10, 10))
+        self.file_frame.pack(padx=10, pady=10, fill="x")
+
+        self.file_path = tk.StringVar()
+        self.file_path.set("No folder selected")
+
+        file_label = ttk.Label(self.file_frame, text="Selected Folder:")
+        file_label.pack(side="left", padx=5, pady=5)
+
+        self.file_entry = ttk.Entry(self.file_frame, textvariable=self.file_path, width=50, state='readonly')
+        self.file_entry.pack(side="left", padx=5, pady=5)
+
+        browse_button = ttk.Button(self.file_frame, text="Browse", command=self.browse_folder)
+        browse_button.pack(side="left", padx=5, pady=5)
+
+    def browse_folder(self):
+        '''Open a folder browser dialog and update the file_path variable with the selected folder'''
+        folder_selected = filedialog.askdirectory()
+        if folder_selected:  # If the user selected a folder
+            self.file_path.set(folder_selected)
+            print(f"Selected folder: {folder_selected}")
 
     def create_mode_switch(self):
         mode_frame = ttk.LabelFrame(self, text="Measurement Mode", padding=(10, 10))
@@ -63,14 +91,6 @@ class SpectrometerGUI(tk.Tk):
         y_label.grid(row=0, column=2, padx=5, pady=5)
         y_entry.grid(row=0, column=3, padx=5, pady=5)
         goto_button.grid(row=0, column=4, padx=5, pady=5)
-
-    def create_file_saving(self):
-        '''Create a frame for opening a browser to select a folder to save the data to'''
-        self.file_frame = ttk.LabelFrame(self, text="File Saving", padding=(10, 10))
-        self.file_frame.pack(padx=10, pady=10, fill="x")
-
-        self.file_path = tk.StringVar()
-        self.file_path.set("C:/Users/sjbrooke/OneDrive - The University of Melbourne/Data/Secondary/Sam Zaman/2024-08-05_BP/analysis")
 
 
     def create_scan_setup(self):
@@ -220,6 +240,13 @@ class SpectrometerGUI(tk.Tk):
         self.spectrometer.go_to_angle(x, y)
 
     def start_scan(self):
+
+        self.spectrometer.data_dir = self.file_path.get()
+
+        if self.spectrometer.data_dir == "No folder selected":
+            print("You must give file save directory before beginning scan. Please browse for the data folder.")
+            return
+
         primary = self.primary_axis.get()
         secondary = self.secondary_axis.get()
         primary_start = self.primary_start_angle.get()
@@ -256,8 +283,9 @@ class SpectrometerGUI(tk.Tk):
     def run_specular_scan(self, start, stop, resolution):
         print(f"Running specular scan from {start}° to {stop}° with resolution {resolution}°.")
 
+        self.scan_list = np.arange(start, stop+resolution, resolution)
         print("Scan to commense:")
-        print(f"Angles: {np.arange(start, stop+resolution, resolution)}")
+        print(f"Angles: {self.scan_list}")
         input("Press Enter to start the scan...")
 
         for angle in np.arange(start, stop+resolution, resolution):
@@ -267,22 +295,45 @@ class SpectrometerGUI(tk.Tk):
 
         self.spectrometer.go_to_angle(start, start)  # Return to the origin
         print("Scan complete.")
+        
+        self.export_scan_list()
+        self.rename_files()
+
+    def rename_files(self):
+        data_files = [file for file in os.listdir(self.file_path) if file.endswith('.txt')]
+
+        reference_files = [file for file in data_files if 'reference' in file]
+        sample_files = [file for file in data_files if 'sample' in file]
+
+        sorted_reference_files = sorted(reference_files, key=lambda x: float(x.split('_')[3]))
+        sorted_sample_files = sorted(sample_files, key=lambda x: float(x.split('_')[3]))
+        
+        for idx, angle in enumerate(self.scan_list):
+            reference_rename = sorted_reference_files[idx].split('_')
+            reference_rename = '_'.join(reference_rename[:-1]) + f"_{angle}.txt"
+            sample_rename = sorted_sample_files[idx].split('_')
+            sample_rename = '_'.join(sample_rename[:-1]) + f"_{angle}.txt"
+
+            os.rename(sorted_reference_files[idx], f"reference_{angle}.txt")
+            os.rename(sorted_sample_files[idx], f"sample_{angle}.txt")
+        
+        print("Files renamed.")
 
     def run_uncoupled_scan(self, primary_parameters, secondary_parameters):
         p_start, p_stop, p_res = primary_parameters
         s_start, s_stop, s_res = secondary_parameters
         axis_order = (self.primary_axis.get(), self.secondary_axis.get())
-        scan_list = self.generate_scan_dimensions(primary_parameters, secondary_parameters, axis_order)
+        self.scan_list = self.generate_scan_dimensions(primary_parameters, secondary_parameters, axis_order)
         
         print(f"Running uncoupled scan with primary axis from {p_start}° to {p_stop}° and secondary axis from {s_start}° to {s_stop}°.")
         # primary_angles = np.arange(p_start, p_stop+p_res, p_res)
         # secondary_angles = np.arange(s_start, s_stop+s_res, s_res)
 
         print("Scan to commense:")
-        print(scan_list)
+        print(self.scan_list)
         input("Press Enter to start the scan...")
 
-        self.export_scan_list(scan_list, "scan_list.txt") # Export the scan list to a file, 
+        self.export_scan_list(self.scan_list, "scan_list.dat") # Export the scan list to a file, 
 
         # for sec_angle in np.arange(s_start, s_stop+s_res, s_res):
         #     pri_angle = p_start
@@ -293,7 +344,7 @@ class SpectrometerGUI(tk.Tk):
         #         self.spectrometer.wait_for_motors()
         #         input("Press Enter to continue to next primary axis angle...")
 
-        for primary_angle, secondary_angle in scan_list:
+        for primary_angle, secondary_angle in self.scan_list:
             self.spectrometer.go_to_angle(primary_angle, secondary_angle)
             self.spectrometer.wait_for_motors()
             input("Press Enter to continue to next angle...")
@@ -308,6 +359,19 @@ class SpectrometerGUI(tk.Tk):
 
 # For testing purposes, we'll create a dummy Spectrometer class
 class DummySpectrometer:
+    def home_motors(self, **args):
+        print("Homing motors...")
+        pass
+
+    def get_current_position(self, **args):
+        print("Getting current motor positions...")
+        pass
+
+    def debug(self, **args):
+        print("Debugging...")
+        breakpoint()
+
+
     def go_to_angle(self, x, y):
         if x is None:
             print(f"Moving Y axis to {y}°")

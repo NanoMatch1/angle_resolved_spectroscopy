@@ -113,22 +113,10 @@ class AngleResolvedSpectrometer:
             else:
                 print('Invalid command')
                 return 
-            
-    # def get_motor_positions(self):
-    #     """Get current motor positions."""
-    #     print("Getting current motor positions...")
-    #     self.send_command_to_UNO('pos')
-    #     time.sleep(0.1)
-    #     response = self.read_from_serial_until()
-    #     pos = response[0][2:-2].split(',')
-    #     current_steps = (int(pos[0]), int(pos[1]))
-    #     print("Finished getting motor positions.")
-    #     return current_steps
-
-    # <P-4674,-4942,0P>
 
 
     def home_partial(self):
+        '''Used for calibrating the setup. Homes the motors to the limit switches and leaves them there.'''
         self.send_command_to_UNO('home')
         time.sleep(0.1)
         responses = self.read_from_serial_until()
@@ -136,6 +124,7 @@ class AngleResolvedSpectrometer:
 
 
     def home_motors(self, soft_limit=None):
+        '''Homing protocol for the motors. Moves the motors to the limit switches and then moves them back to the soft limit.'''
         if soft_limit is None:
             soft_limit = self.soft_limit
             
@@ -283,9 +272,6 @@ class AngleResolvedSpectrometer:
             responses.append(response)
             print(response)
 
-    def calibration(self):
-        pass
-
     def send_and_receive(self, command):
         '''Blocking. waits until axes are done'''
         """Send a command to Arduino and get the response."""
@@ -305,29 +291,6 @@ class AngleResolvedSpectrometer:
         
         print(f'X: {self.current_angle["X"]}, Y: {self.current_angle["Y"]}')
         
-    # def run_scan(self, start_angle, end_angle, resolution):
-    #     series_name = input("Enter series name: ")
-    #     self.scan_log = []
-    #     """Run a scan from start to end angle with given step size."""
-    #     if abs(self.angle_to_steps('X', start_angle)) > self.hard_limits['X']:
-    #         print("Start angle exceeds hard limit for X motor.")
-    #         return
-    #     if abs(self.angle_to_steps('Y', start_angle)) > self.hard_limits['Y']:
-    #         print("Start angle exceeds hard limit for Y motor.")
-    #         return
-        
-    #     angles = np.arange(start_angle, end_angle + resolution, resolution)
-    #     print("Scan to commence at angles: ", angles)
-    #     input("Press Enter to start the scan...")
-    #     os.makedirs(os.path.join(self.working_dir, series_name), exist_ok=True)
-
-    #     for angle in angles:
-    #         self.go_to_angle(angle)
-    #         self.scan_log.append([self.current_angle['X'], self.current_angle['Y']])
-    #         input("Collect data at this angle and press Enter to continue...")
-    #         # Do something with the spectrometer here
-    #         # For example, take a measurement at the current angle
-    #         # and store the data for further
 
     def rename_files(self, series_name, angles):
         """Rename files in the current directory with a given prefix and suffix."""
@@ -357,19 +320,6 @@ class AngleResolvedSpectrometer:
             try:
                 cmd = input("Enter command: ").strip().lower()
 
-            # if cmd.startswith('a'):
-            #     angle = cmd.split(' ')[1]
-            #     self.go_to_angle(angle)
-
-            # elif cmd == 'pos':
-            #     self.get_current_position()
-            #     print(f"Current positions: X: {self.current_angle['X']} degrees, Y: {self.current_angle['Y']} degrees")
-            # elif cmd == 'home':
-            #     self.home_motors()
-            # elif cmd == 'exit':
-            #     break
-            # elif cmd in self.commandDict:
-            #     self.process_coms(cmd)
                 if cmd.startswith('z'):
                     angle = cmd.split(' ')[1]
                     self.send_command_to_UNO('moz{}'.format(angle))
@@ -393,6 +343,8 @@ app.mainloop()
 # z ~600 steps/90 deg
 
 
-# TODO: change the final homing step to return to 15 degrees
+# TODO: 
+# file saving and editing
+# move scan methods to the AngleResolvedSpectrometer class
 # balance armature masses to reduce the load on the motors
-# decrease motor current
+# test torque and decrease motor current
