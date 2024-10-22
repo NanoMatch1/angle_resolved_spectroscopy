@@ -42,6 +42,9 @@ class SpectrometerGUI(tk.Tk):
         set_motor_pos_button = ttk.Button(mode_frame, text="Set Motor Positions", command=self.set_motor_positions)
         set_motor_pos_button.pack(side="right", padx=5, pady=5) # Add a button to set the motor positions
 
+        debug_button = ttk.Button(mode_frame, text="Debug", command=self.spectrometer.debug)
+        debug_button.pack(side="right", padx=5, pady=5) # Add a debug button to test the serial communication
+
     def create_angle_control(self):
         angle_frame = ttk.LabelFrame(self, text="Manual Angle Control", padding=(10, 10))
         angle_frame.pack(padx=10, pady=10, fill="x")
