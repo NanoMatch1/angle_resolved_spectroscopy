@@ -2,28 +2,44 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import json
 
 def rename_files(dataDir):
+    '''Renames files in the directory based on the scan_list.dat file.'''
     reference_files = [file for file in os.listdir(dataDir) if 'reference' in file]
     sample_files = [file for file in os.listdir(dataDir) if 'sample' in file]
-    sorted_reference_files = sorted(reference_files, key=lambda x: int(x.split('_')[3].split('.')[0]))
-    sorted_sample_files = sorted(sample_files, key=lambda x: int(x.split('_')[3].split('.')[0]))
+    try:
+        sorted_reference_files = sorted(reference_files, key=lambda x: int(x.split('_')[3].split('.')[0]))
+        sorted_sample_files = sorted(sample_files, key=lambda x: int(x.split('_')[3].split('.')[0]))
+    except ValueError:
+        try:
+            test_file = reference_files[0].split('_')[3].split('.')[0].split(',')
+            test = [float(angle) for angle in test_file]
+            print("Files appear to be renamed. Skipping renaming.")
+            return
+        except Exception as e:
+            print(f"Error in file renaming: {e}\nPlease check the files and try again.")
+            
+    # open json file for scan list
+    with open(os.path.join(dataDir, 'scan_list.json'), 'r') as file:
+        scan_list = json.load(file)
+    
+    # breakpoint()
+    reference_angles = scan_list.get('reference')
+    sample_angles = scan_list.get('sample')
 
-    angle_list = []
+    for idx in range(len(reference_angles)):
+        ref_angle = [str(angle) for angle in reference_angles[idx]]
+        ref_angle_tag = ','.join(ref_angle)
+        ref_rename = sorted_reference_files[idx].split('_')
+        ref_rename = '_'.join(ref_rename[:-1]) + f"_{ref_angle_tag}.txt"
 
-    with open(os.path.join(dataDir, 'scan_list.dat'), 'r') as file:
-        lines = file.readlines()
-        for line in lines:
-            line = line.strip()
-            angle_list.append(line.split(','))
-
-    for idx, angles in enumerate(angle_list):
-        reference_rename = sorted_reference_files[idx].split('_')
-        reference_rename = '_'.join(reference_rename[:-1]) + f"_{angles[0]}.txt"
+        sample_angle = [str(angle) for angle in sample_angles[idx]]
+        sample_angle_tag = ','.join(sample_angle)
         sample_rename = sorted_sample_files[idx].split('_')
-        sample_rename = '_'.join(sample_rename[:-1]) + f"_{angles[0]}.txt"
+        sample_rename = '_'.join(sample_rename[:-1]) + f"_{sample_angle_tag}.txt"
 
-        os.rename(os.path.join(dataDir, sorted_reference_files[idx]), os.path.join(dataDir, reference_rename))
+        os.rename(os.path.join(dataDir, sorted_reference_files[idx]), os.path.join(dataDir, ref_rename))
         os.rename(os.path.join(dataDir, sorted_sample_files[idx]), os.path.join(dataDir, sample_rename))
 
     print("Files renamed.")
@@ -32,17 +48,21 @@ class ReflectionFile:
     def __init__(self, filepath):
         self.filepath = filepath
         self.filename = os.path.basename(filepath)
-        self.data_type, self.angle = self._parse_filename(self.filename)
+        self.data_type, self.angles = self._parse_filename(self.filename)
         self.header = {}
         self.data = None
         self.load_file()
 
+    def __repr__(self):
+        return f"ReflectionFile: {self.filename}"
+
     def _parse_filename(self, filename):
         name_parts = filename[:-4].split('_')
         data_type = name_parts[1]
-        angle = float(name_parts[3].split('.')[0])
+        angles = name_parts[3].split('.')[0].split(',')
+        angles = tuple([float(angle) for angle in angles])
         # breakpoint()
-        return data_type, angle
+        return data_type, angles
 
     def load_file(self):
         with open(self.filepath, 'r') as file:
@@ -82,12 +102,21 @@ class ReflectionFile:
         return float(self.header.get('Integration Time (sec)', 0))
 
 class AngleReflectance:
-    def __init__(self, fileDir):
+
+    def __init__(self, fileDir, reference_axis=(1, 1)):
+        '''Initialise the class and load files from the directory as angle resolved reflectance data. 
+        
+        reference_axis can be a combination of integer values, spanning the range of the total number of axes. It provides a mapping of axis for which uncoupled scans are to be normalised. The ordering is (sample, reference). Secondary axes are selected by default. For instance, (0, 0) maps the two primary axes together, such that all of the samples with angles (a, _) will be normalised agains the reference with (a, _). (0, 1) maps (a, _) to (_, a), and (1, 1) maps (_, a) to (_, a).
+        
+        Use caution when selecting axes - you must consider an appropriate logical reference mapping for your data to be quantitative.'''
+
         self.fileDir = fileDir
         self.files = self.load_data()
         self.sample_identifier = 'sample'
         self.reference_identifier = 'reference'
+        self.reference_axis = reference_axis
         self.identifier = None
+        self.warning_flags = []
 
     def load_data(self):
         files = [os.path.join(self.fileDir, file) for file in os.listdir(self.fileDir) if file.endswith('.txt')]
@@ -97,9 +126,23 @@ class AngleReflectance:
         for file in reflection_files:
             if file.data_type not in angle_dict:
                 angle_dict[file.data_type] = {}
-            angle_dict[file.data_type][file.angle] = file
+            angle_dict[file.data_type][file.angles] = file
 
         return angle_dict
+    
+    def find_reference(self, angles:tuple):
+        '''Finds the reference file based on the reference axis mapping'''
+        sample_angle = angles[self.reference_axis[0]]
+
+        reference_candidates = [angle for angle in self.files['reference'].keys() if angle[self.reference_axis[1]] == sample_angle]
+
+        assert len(reference_candidates) > 0 , f"No reference found for {angles}."
+        if len(reference_candidates) > 1:
+            self.warning_flags.append(f"Multiple references found for {angles}. Using the first one.")
+
+        return reference_candidates[0]
+    
+
 
     def calculate_reflectivity(self, reference_identifier=None, sample_identifier=None, time_normalised=False):
         '''Calculates the reflectivity of the sample using the reference data. If time_normalised is True, the reflectance is normalised by the integration time of the sample.'''
@@ -113,19 +156,25 @@ class AngleReflectance:
         sample_dict = self.files[sample_identifier]
         self.reflectance_dict = {}
 
-        for angle in sample_dict:
-            sample_data = sample_dict[angle].data
-            reference_data = reference_dict[angle].data
+        for angles in sample_dict:
+            sample_file = sample_dict.get(angles)
+            reference_file = reference_dict.get(angles)
+            # breakpoint()
+            if reference_file is None:
+                reference_file = reference_dict.get(self.find_reference(angles))
+            
+            sample_data = sample_file.data
+            reference_data = reference_file.data
             reflectance_data = sample_data[:, 1] / reference_data[:, 1]
 
             if time_normalised is True:
                 # Handle different integration times if needed
-                integration_time_ratio = sample_dict[angle].integration_time / reference_dict[angle].integration_time
+                integration_time_ratio = sample_file.integration_time / reference_file.integration_time
                 reflectance_data *= integration_time_ratio
 
             reflectance_data *= 100  # Convert to percentage
             # reflectance_data /= 2 # the data is doubled for some reason, possibly normalisation time #TODO: Fix this Its from the integration time of 0.5s... but the ratios should be the same...
-            self.reflectance_dict[angle] = np.column_stack((sample_data[:, 0], reflectance_data))
+            self.reflectance_dict[angles] = np.column_stack((sample_data[:, 0], reflectance_data))
 
         return self.reflectance_dict
 
@@ -213,6 +262,8 @@ class AngleReflectance:
         if save_plot == True:
             if exportDir is None:
                 exportDir = os.path.join(self.fileDir, 'exported_data')
+                if not os.path.exists(exportDir):
+                    os.makedirs(exportDir)
             plt.savefig(os.path.join(exportDir, f"{self.identifier}_individual.png"))
         plt.show()
 
@@ -271,13 +322,15 @@ class AngleReflectance:
         newDict = {key: {} for key in self.files.keys()}
 
         for key, reflectanceFile in self.files.items():
-            for angle, data in reflectanceFile.items():
-                # breakpoint()
+            for angles, data in reflectanceFile.items():
                 mask = (data.data[:, 0] >= region[0]) & (data.data[:, 0] <= region[1])
+                if True not in mask:
+                    print("Mask region empty. Skipping normalisation")
+                    return
                 min_val = np.min(data.data[:, 1])
                 max_val = np.max(data.data[mask, 1])
                 data.data[:, 1] = (data.data[:, 1] - min_val) / (max_val - min_val) * 100
-                newDict[angle] = data.data
+                newDict[angles] = data.data
 
             newDict[key] = newDict
     
@@ -337,17 +390,18 @@ if __name__ == '__main__':
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO_3nm-2' # ITO_3nm-2
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO-3nm-3-Spol' # ITO_3nm-1-Spol
     fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\Nitu 22-10-24\P-pol'
+    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Aurora\DNF'
     
-    # rename_files(fileDir)
-    angleData = AngleReflectance(fileDir)
-    angleData.identifier = 'ITO-thick-P-pol'# for the export file
+    rename_files(fileDir)
+    angleData = AngleReflectance(fileDir, reference_axis=(1, 1))
+    angleData.identifier = 'DNF'# for the export file
     # angleData.plot_original()
-    angleData.normalise_raw(region=(1500, 1600))
+    # angleData.normalise_raw(region=(1500, 1600))
     # angleData.plot_raw(offset=0)
     angleData.calculate_reflectivity(reference_identifier='reference', sample_identifier='sample', time_normalised=True)
-    angleData.truncate_data(region=(900, 1650))
+    angleData.truncate_data(region=(440, 1000))
     # angleData.normalise_reflectance(region=(1500, 1600), normalisation_type='max')
     # angleData.normalise_reflectance_partial(region=(1500, 1600), normalisation_type='max')
-    # angleData.plot_reflectance(xregion=(900, 1650),  yregion=(-5, 105), save_plot=False)
-    angleData.plot_reflectance_individual(xregion=(900, 1650), save_plot=True)
-    # angleData.export_data()
+    angleData.plot_reflectance(xregion=(440, 1000),  yregion=(-5, 105), save_plot=False)
+    angleData.plot_reflectance_individual(xregion=(440, 1000), save_plot=True)
+    angleData.export_data()
