@@ -4,16 +4,30 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import json
 
-def rename_files(dataDir):
+def generate_scan_list(dataDir, params):
+    if len(params) != 3:
+        print("Please provide the correct number of parameters.")
+        return False
+    for x in params:
+        try:
+            float(x)
+        except ValueError:
+            print("Please provide valid angles.")
+            return False
+        
+    ref_angles = np.arange(float(params[0]), float(params[1]), float(params[2]))
+
+
+def rename_files(dataDir, ref_id='reference', sample_id='sample'):
     '''Renames files in the directory based on the scan_list.dat file.'''
-    reference_files = [file for file in os.listdir(dataDir) if 'reference' in file]
-    sample_files = [file for file in os.listdir(dataDir) if 'sample' in file]
+    reference_files = [file for file in os.listdir(dataDir) if ref_id in file]
+    sample_files = [file for file in os.listdir(dataDir) if sample_id in file]
     try:
-        sorted_reference_files = sorted(reference_files, key=lambda x: int(x.split('_')[3].split('.')[0]))
-        sorted_sample_files = sorted(sample_files, key=lambda x: int(x.split('_')[3].split('.')[0]))
+        sorted_reference_files = sorted(reference_files, key=lambda x: int(x.split('_')[2].split('.')[0]))
+        sorted_sample_files = sorted(sample_files, key=lambda x: int(x.split('_')[2].split('.')[0]))
     except ValueError:
         try:
-            test_file = reference_files[0].split('_')[3].split('.')[0].split(',')
+            test_file = reference_files[0].split('_')[2].split('.')[0].split(',')
             test = [float(angle) for angle in test_file]
             print("Files appear to be renamed. Skipping renaming.")
             return
@@ -21,12 +35,24 @@ def rename_files(dataDir):
             print(f"Error in file renaming: {e}\nPlease check the files and try again.")
             
     # open json file for scan list
+    if not os.path.exists(os.path.join(dataDir, 'scan_list.json')):
+        while True:
+            user_in = input("Scan list json file not found. Would you like to generate the scan list flie? (y/n): ")
+            if user_in.lower() == 'y':
+                while True:
+                    param_in = input("Enter scan params separated by comma: start_angle,stop_angle,resolution:\n")
+                    params = user_in.split(',')
+                    if generate_scan_list(dataDir, params) is True:
+                        break
+                    else:
+                        continue
+
     with open(os.path.join(dataDir, 'scan_list.json'), 'r') as file:
         scan_list = json.load(file)
     
     # breakpoint()
-    reference_angles = scan_list.get('reference')
-    sample_angles = scan_list.get('sample')
+    reference_angles = scan_list.get(ref_id)
+    sample_angles = scan_list.get(sample_id)
 
     for idx in range(len(reference_angles)):
         ref_angle = [str(angle) for angle in reference_angles[idx]]
@@ -385,21 +411,26 @@ class AngleReflectance:
 if __name__ == '__main__':
     # utility_test()
     # breakpoint()
-    # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_ITO_04092024'
+    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_ITO_04092024'
+    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Shifan'
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO_4-10-24' # ITO_3nm-1
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO_3nm-2' # ITO_3nm-2
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO-3nm-3-Spol' # ITO_3nm-1-Spol
-    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\Nitu 22-10-24\P-pol'
-    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Aurora\DNF'
+    # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\Nitu 22-10-24\P-pol'
+    # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Aurora\DNF'
     
-    rename_files(fileDir)
+    ref_id = 'BG'
+    sample_id = '20uL'
+
+    rename_files(fileDir, ref_id=ref_id, sample_id=sample_id)
     angleData = AngleReflectance(fileDir, reference_axis=(1, 1))
-    angleData.identifier = 'DNF'# for the export file
-    # angleData.plot_original()
+    angleData.identifier = '20uL-unpol'# for the export file
+    angleData.plot_original()
     # angleData.normalise_raw(region=(1500, 1600))
     # angleData.plot_raw(offset=0)
-    angleData.calculate_reflectivity(reference_identifier='reference', sample_identifier='sample', time_normalised=True)
+    angleData.calculate_reflectivity(reference_identifier=ref_id, sample_identifier=sample_id, time_normalised=True)
     angleData.truncate_data(region=(440, 1000))
+    breakpoint()
     # angleData.normalise_reflectance(region=(1500, 1600), normalisation_type='max')
     # angleData.normalise_reflectance_partial(region=(1500, 1600), normalisation_type='max')
     angleData.plot_reflectance(xregion=(440, 1000),  yregion=(-5, 105), save_plot=False)
