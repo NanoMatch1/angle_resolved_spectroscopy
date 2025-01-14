@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import json
+import re
 
 def generate_scan_list(dataDir, params):
     if len(params) != 3:
@@ -15,13 +16,51 @@ def generate_scan_list(dataDir, params):
             print("Please provide valid angles.")
             return False
         
-    ref_angles = np.arange(float(params[0]), float(params[1]), float(params[2]))
+    ref_angles = np.arange(float(params[0]), float(params[1]) + float(params[2]), float(params[2]))
+    # sample_angles = np.arange(float(params[0]), float(params[1]) + float(params[2]), float(params[2]))
+
+
+    scan_params = [[angle, angle] for angle in ref_angles]
+    scan_list = {'reference': scan_params, 'sample': scan_params}
+    with open(os.path.join(dataDir, 'scan_list.json'), 'w') as file:
+        json.dump(scan_list, file)
+    print("Scan list generated.")
+    return True
 
 
 def rename_files(dataDir, ref_id='reference', sample_id='sample'):
     '''Renames files in the directory based on the scan_list.dat file.'''
+
+    def exclude_files(file_list):
+        '''Excludes files which already have the angles in the filename, indicating renaming has been successful.'''
+
+        new_file_list = [x for x in file_list]
+
+        for file in file_list:
+            try:
+                basename = re.sub(r'\.\w{3}$', '', file)
+                endstring = basename.split('_')[-1]
+                angles = endstring.split(',')
+                if len(angles) > 1:
+                    new_file_list.remove(file)
+            except Exception as e:
+                pass
+
+        
+        return new_file_list
+
     reference_files = [file for file in os.listdir(dataDir) if ref_id in file]
     sample_files = [file for file in os.listdir(dataDir) if sample_id in file]
+
+    reference_files = exclude_files(reference_files)
+    sample_files = exclude_files(sample_files)
+
+    
+    
+    if len(reference_files) == 0 and len(sample_files) == 0:
+        print("Files appear to be renamed. Skipping renaming.")
+        return
+
     try:
         sorted_reference_files = sorted(reference_files, key=lambda x: int(x.split('_')[2].split('.')[0]))
         sorted_sample_files = sorted(sample_files, key=lambda x: int(x.split('_')[2].split('.')[0]))
@@ -41,7 +80,7 @@ def rename_files(dataDir, ref_id='reference', sample_id='sample'):
             if user_in.lower() == 'y':
                 while True:
                     param_in = input("Enter scan params separated by comma: start_angle,stop_angle,resolution:\n")
-                    params = user_in.split(',')
+                    params = param_in.split(',')
                     if generate_scan_list(dataDir, params) is True:
                         break
                     else:
@@ -51,8 +90,10 @@ def rename_files(dataDir, ref_id='reference', sample_id='sample'):
         scan_list = json.load(file)
     
     # breakpoint()
-    reference_angles = scan_list.get(ref_id)
-    sample_angles = scan_list.get(sample_id)
+    reference_angles = scan_list.get('reference')
+    sample_angles = scan_list.get('sample')
+
+    # breakpoint()
 
     for idx in range(len(reference_angles)):
         ref_angle = [str(angle) for angle in reference_angles[idx]]
@@ -65,9 +106,15 @@ def rename_files(dataDir, ref_id='reference', sample_id='sample'):
         sample_rename = sorted_sample_files[idx].split('_')
         sample_rename = '_'.join(sample_rename[:-1]) + f"_{sample_angle_tag}.txt"
 
-        os.rename(os.path.join(dataDir, sorted_reference_files[idx]), os.path.join(dataDir, ref_rename))
-        os.rename(os.path.join(dataDir, sorted_sample_files[idx]), os.path.join(dataDir, sample_rename))
 
+        try:
+            os.rename(os.path.join(dataDir, sorted_reference_files[idx]), os.path.join(dataDir, ref_rename))
+        except Exception as e:
+            print(f"Error renaming file: {e}")
+        try:
+            os.rename(os.path.join(dataDir, sorted_sample_files[idx]), os.path.join(dataDir, sample_rename))
+        except Exception as e:
+            print(f"Error renaming file: {e}")
     print("Files renamed.")
 
 class ReflectionFile:
@@ -83,11 +130,44 @@ class ReflectionFile:
         return f"ReflectionFile: {self.filename}"
 
     def _parse_filename(self, filename):
-        name_parts = filename[:-4].split('_')
-        data_type = name_parts[1]
-        angles = name_parts[3].split('.')[0].split(',')
-        angles = tuple([float(angle) for angle in angles])
-        # breakpoint()
+        '''Parses the filename to extract the data type and angles. File convention needs to contain:
+        1. A data type identifier ("ref" or sample identifier (not yet implimented)
+        2. Angles in the format "a,b" where a and b are the two angles in degrees.'''
+
+        def match_angles(name_string):
+            pattern = r"-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?"
+            matches = re.findall(pattern, name_string) 
+            return matches
+        
+        def match_basename_identifier(pattern, name_string):
+            match = re.match(pattern, name_string.lower())
+            return match
+
+        def extract_angles(name_string):
+            angles = match_angles(filename)
+            if len(angles) > 1:
+                print(f"Multiple angle matches found for {filename}. Using the first one.")
+            angles = angles[0].split(',')
+            angles = tuple([float(angle) for angle in angles])
+            return angles
+
+        # generate basename and identifier
+        name_parts = filename.split('_')
+        file_basename = name_parts[0]
+
+        reference_matches = match_basename_identifier(r'.*ref.*', file_basename)
+        # sample_name_matches = match_basename_identifier(file_basename, r'.*.*')
+
+        if reference_matches:
+            data_type = 'reference'
+        else:
+            data_type = 'sample'
+            print(f"predicting sample for {file_basename}")
+
+        angles = extract_angles(filename)
+
+        
+        breakpoint()
         return data_type, angles
 
     def load_file(self):
