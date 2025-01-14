@@ -133,7 +133,7 @@ class ReflectionFile:
         return f"{self.data_type}: {self.angles}"
     
     def info(self):
-        return {'data_type': self.data_type, 'angles': self.angles, 'filename': self.filename}
+        return {'data_type': self.data_type, 'angles': self.angles, 'filename': self.filename, 'integration_time': self.header.get('Integration Time (sec)', None)}
 
     def _parse_filename(self, filename):
         '''Parses the filename to extract the data type and angles. File convention needs to contain:
@@ -296,6 +296,9 @@ class AngleReflectance:
             reference_identifier = self.reference_identifier
         if sample_identifier is None:
             sample_identifier = self.sample_identifier
+
+
+        # breakpoint()
         
         reference_dict = self.dataDict[reference_identifier]
         sample_dict = self.dataDict[sample_identifier]
@@ -314,7 +317,8 @@ class AngleReflectance:
 
             if time_normalised is True:
                 # Handle different integration times if needed
-                integration_time_ratio = sample_file.integration_time / reference_file.integration_time
+                integration_time_ratio = reference_file.integration_time / sample_file.integration_time 
+                breakpoint()
                 reflectance_data *= integration_time_ratio
 
             reflectance_data *= 100  # Convert to percentage
@@ -547,9 +551,9 @@ if __name__ == '__main__':
     angleData.plot_original()
     # angleData.normalise_raw(region=(1500, 1600))
     # angleData.plot_raw(offset=0)
-    angleData.calculate_reflectivity(reference_identifier=ref_id, sample_identifier=sample_id, time_normalised=True)
+    angleData.calculate_reflectivity(time_normalised=True)
     angleData.truncate_data(region=(440, 1000))
-    breakpoint()
+    # breakpoint()
     # angleData.normalise_reflectance(region=(1500, 1600), normalisation_type='max')
     # angleData.normalise_reflectance_partial(region=(1500, 1600), normalisation_type='max')
     angleData.plot_reflectance(xregion=(440, 1000),  yregion=(-5, 105), save_plot=False)
