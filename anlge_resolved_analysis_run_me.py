@@ -318,7 +318,7 @@ class AngleReflectance:
             if time_normalised is True:
                 # Handle different integration times if needed
                 integration_time_ratio = reference_file.integration_time / sample_file.integration_time 
-                breakpoint()
+                # breakpoint()
                 reflectance_data *= integration_time_ratio
 
             reflectance_data *= 100  # Convert to percentage
