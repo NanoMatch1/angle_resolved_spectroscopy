@@ -127,7 +127,13 @@ class ReflectionFile:
         self.load_file()
 
     def __repr__(self):
-        return f"ReflectionFile: {self.filename}"
+        return f"ReflectionFile: {self.data_type}:{self.angles}:{self.filename}"
+    
+    def __str__(self):
+        return f"{self.data_type}: {self.angles}"
+    
+    def info(self):
+        return {'data_type': self.data_type, 'angles': self.angles, 'filename': self.filename}
 
     def _parse_filename(self, filename):
         '''Parses the filename to extract the data type and angles. File convention needs to contain:
@@ -166,8 +172,6 @@ class ReflectionFile:
 
         angles = extract_angles(filename)
 
-        
-        breakpoint()
         return data_type, angles
 
     def load_file(self):
@@ -217,7 +221,9 @@ class AngleReflectance:
         Use caution when selecting axes - you must consider an appropriate logical reference mapping for your data to be quantitative.'''
 
         self.fileDir = fileDir
-        self.files = self.load_data()
+        self.dataDict = self.load_data()
+        self.data_ok = self.report_info()
+
         self.sample_identifier = 'sample'
         self.reference_identifier = 'reference'
         self.reference_axis = reference_axis
@@ -236,11 +242,44 @@ class AngleReflectance:
 
         return angle_dict
     
+    def report_info(self):
+        references = {}
+        samples = {}
+
+        for file_type, file_dict in self.dataDict.items():
+            # print(f"{file_type}:")
+            for angles, file in file_dict.items():
+                infoDict = file.info()
+                if file_type == 'reference':
+                    references[angles] = infoDict
+                else:
+                    samples[angles] = infoDict
+
+        print("### Report ###")
+        if len(references) != len(samples):
+            print("Warning: Different number of reference and sample files.")
+
+        ref_angles_set = set(references.keys())
+        sample_angles_set = set(samples.keys())
+
+        missing_in_samples = ref_angles_set - sample_angles_set
+        missing_in_references = sample_angles_set - ref_angles_set
+
+        if missing_in_samples:
+            print(f"Warning: The following reference angles are missing in samples: {missing_in_samples}")
+        elif missing_in_references:
+            print(f"Warning: The following sample angles are missing in references: {missing_in_references}")
+        else:
+            print("All angles accounted for.")
+
+        return True
+
+    
     def find_reference(self, angles:tuple):
         '''Finds the reference file based on the reference axis mapping'''
         sample_angle = angles[self.reference_axis[0]]
 
-        reference_candidates = [angle for angle in self.files['reference'].keys() if angle[self.reference_axis[1]] == sample_angle]
+        reference_candidates = [angle for angle in self.dataDict['reference'].keys() if angle[self.reference_axis[1]] == sample_angle]
 
         assert len(reference_candidates) > 0 , f"No reference found for {angles}."
         if len(reference_candidates) > 1:
@@ -258,8 +297,8 @@ class AngleReflectance:
         if sample_identifier is None:
             sample_identifier = self.sample_identifier
         
-        reference_dict = self.files[reference_identifier]
-        sample_dict = self.files[sample_identifier]
+        reference_dict = self.dataDict[reference_identifier]
+        sample_dict = self.dataDict[sample_identifier]
         self.reflectance_dict = {}
 
         for angles in sample_dict:
@@ -285,9 +324,9 @@ class AngleReflectance:
         return self.reflectance_dict
 
     def plot_raw(self, offset=0):
-        label_1, label_2 = list(self.files.keys())[:2]
-        key_dict_1 = self.files[label_1]
-        key_dict_2 = self.files[label_2]
+        label_1, label_2 = list(self.dataDict.keys())[:2]
+        key_dict_1 = self.dataDict[label_1]
+        key_dict_2 = self.dataDict[label_2]
 
         fig, ax = plt.subplots(1, 2)
 
@@ -375,8 +414,8 @@ class AngleReflectance:
 
 
     def plot_original(self):
-        data_dict = self.files['sample']
-        ref_dict = self.files['reference']
+        data_dict = self.dataDict['sample']
+        ref_dict = self.dataDict['reference']
 
         fig, ax = plt.subplots(2, 1)
 
@@ -425,9 +464,9 @@ class AngleReflectance:
 
     def normalise_raw(self, region=(1500, 1600)):
         '''Normalised the raw data to the region of interest, using the a global minimum. '''
-        newDict = {key: {} for key in self.files.keys()}
+        newDict = {key: {} for key in self.dataDict.keys()}
 
-        for key, reflectanceFile in self.files.items():
+        for key, reflectanceFile in self.dataDict.items():
             for angles, data in reflectanceFile.items():
                 mask = (data.data[:, 0] >= region[0]) & (data.data[:, 0] <= region[1])
                 if True not in mask:
@@ -499,7 +538,7 @@ if __name__ == '__main__':
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\Nitu 22-10-24\P-pol'
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Aurora\DNF'
     
-    ref_id = 'BG'
+    ref_id = 'reference'
     sample_id = '20uL'
 
     rename_files(fileDir, ref_id=ref_id, sample_id=sample_id)
