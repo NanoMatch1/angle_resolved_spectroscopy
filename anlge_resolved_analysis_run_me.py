@@ -117,6 +117,28 @@ def rename_files(dataDir, ref_id='reference', sample_id='sample'):
             print(f"Error renaming file: {e}")
     print("Files renamed.")
 
+def move_darks(dataDir):
+    '''Moves dark files to a separate directory.'''
+    dark_files = [file for file in os.listdir(dataDir) if 'dark' in file.lower()]
+    for file in dark_files:
+        if os.path.isdir(file):
+            dark_files.remove(file)
+
+    if len(dark_files) == 0:
+        print("No dark files found.")
+        return
+    
+    dark_dir = os.path.join(dataDir, 'darc_files')
+    if not os.path.exists(dark_dir):
+        os.makedirs(dark_dir)
+    
+    for file in dark_files:
+        try:
+            os.rename(os.path.join(dataDir, file), os.path.join(dark_dir, file))
+        except Exception as e:
+            print(f"Error moving file: {e}")
+    print("Dark files moved to darc_files directory.")
+
 class ReflectionFile:
     def __init__(self, filepath):
         self.filepath = filepath
@@ -170,6 +192,9 @@ class ReflectionFile:
             data_type = 'sample'
             print(f"predicting sample for {file_basename}")
 
+        if 'dark' in filename.lower():
+            return data_type, 'dark'
+        
         angles = extract_angles(filename)
 
         return data_type, angles
@@ -221,7 +246,9 @@ class AngleReflectance:
         Use caution when selecting axes - you must consider an appropriate logical reference mapping for your data to be quantitative.'''
 
         self.fileDir = fileDir
+        self.dark_dir = os.path.join(fileDir, 'darc_files')
         self.dataDict = self.load_data()
+        self.darks = self.check_darks()
         self.data_ok = self.report_info()
 
         self.sample_identifier = 'sample'
@@ -273,6 +300,46 @@ class AngleReflectance:
             print("All angles accounted for.")
 
         return True
+    
+    def check_darks(self):
+        if os.path.exists(self.dark_dir):
+            print("Dark files found.")
+            return self.load_darks()
+        else:
+            print("No dark files found.")
+            return None
+
+    def load_darks(self):
+        darks = [file for file in os.listdir(self.dark_dir) if 'dark' in file.lower()]
+        darks = [os.path.join(self.dark_dir, file) for file in darks]
+
+        if len(darks) == 0:
+            print("No dark files found.")
+            return
+
+        darks = [ReflectionFile(file) for file in darks]
+
+        darks_dict = {file.data_type: file for file in darks}
+
+
+        return darks_dict
+    
+    def subtract_darks(self):
+        if self.darks is None:
+            print("No dark files found. Skipping subtraction.")
+            return
+
+        for data_type, angle_dict in self.dataDict.items():
+            dark_data = self.darks.get(data_type)
+            if dark_data is None:
+                print(f"No dark data found for {data_type}. Skipping subtraction.")
+                continue
+
+            for angle, reflect_obj in angle_dict.items():
+                reflect_obj.data[:, 1] -= dark_data.data[:, 1]
+            
+            print("Darks subtracted for {}.".format(data_type))
+        
 
     
     def find_reference(self, angles:tuple):
@@ -369,6 +436,9 @@ class AngleReflectance:
         if save_plot == True:
             if exportDir is None:
                 exportDir = os.path.join(self.fileDir, 'exported_data')
+            
+            if not os.path.exists(exportDir):
+                os.makedirs(exportDir)
             plt.savefig(os.path.join(exportDir, f"{self.identifier}.png"))
         plt.show()
 
@@ -535,7 +605,7 @@ if __name__ == '__main__':
     # utility_test()
     # breakpoint()
     fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_ITO_04092024'
-    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Shifan'
+    fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Shifan\thick_film_darksub'
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO_4-10-24' # ITO_3nm-1
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO_3nm-2' # ITO_3nm-2
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Nitu_Ann\ITO-3nm-3-Spol' # ITO_3nm-1-Spol
@@ -543,11 +613,14 @@ if __name__ == '__main__':
     # fileDir = r'C:\Users\sjbrooke\OneDrive - The University of Melbourne\Data\Aurora\DNF'
     
     ref_id = 'reference'
-    sample_id = '20uL'
+    sample_id = 'sample'
 
+    move_darks(fileDir)
     rename_files(fileDir, ref_id=ref_id, sample_id=sample_id)
+    
     angleData = AngleReflectance(fileDir, reference_axis=(1, 1))
-    angleData.identifier = '20uL-unpol'# for the export file
+    angleData.subtract_darks()
+    angleData.identifier = '100 uL thick'# for the export file
     angleData.plot_original()
     # angleData.normalise_raw(region=(1500, 1600))
     # angleData.plot_raw(offset=0)
@@ -556,6 +629,6 @@ if __name__ == '__main__':
     # breakpoint()
     # angleData.normalise_reflectance(region=(1500, 1600), normalisation_type='max')
     # angleData.normalise_reflectance_partial(region=(1500, 1600), normalisation_type='max')
-    angleData.plot_reflectance(xregion=(440, 1000),  yregion=(-5, 105), save_plot=False)
+    angleData.plot_reflectance(xregion=(440, 1000),  yregion=(0, 10), save_plot=True)
     angleData.plot_reflectance_individual(xregion=(440, 1000), save_plot=True)
     angleData.export_data()

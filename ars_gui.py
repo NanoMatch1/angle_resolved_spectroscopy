@@ -353,6 +353,9 @@ class SpectrometerGUI(tk.Tk):
         print("Scan complete.")
     
     def export_scan_list(self, scan_list, filename):
+        json_scan_list = {"reference": self.scan_list,
+                          "sample": self.scan_list}
+        
         with open(filename, "w") as f:
             for primary_angle, secondary_angle in scan_list:
                 f.write(f"{primary_angle},{secondary_angle}\n")

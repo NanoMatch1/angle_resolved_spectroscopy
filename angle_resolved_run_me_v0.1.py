@@ -331,7 +331,7 @@ class AngleResolvedSpectrometer:
                 continue
 
 # Instantiate the spectrometer
-ars = AngleResolvedSpectrometer(serial_port="COM9")
+ars = AngleResolvedSpectrometer(serial_port="COM7")
 app = SpectrometerGUI(ars)
 app.mainloop()
 
