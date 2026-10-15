@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 380" width="640" height="380" font-family="Helvetica, Arial, sans-serif" font-size="14">
+  <title>Angle-resolved spectrometer geometry</title>
+  <rect width="640" height="380" fill="#ffffff"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d9480f"/>
+    </marker>
+  </defs>
+
+  <!-- sample -->
+  <rect x="200" y="300" width="240" height="18" fill="#adb5bd" stroke="#495057"/>
+  <text x="320" y="345" text-anchor="middle" fill="#212529">sample (or silver reference mirror), lying flat</text>
+
+  <!-- vertical / normal -->
+  <line x1="320" y1="300" x2="320" y2="40" stroke="#495057" stroke-dasharray="6 5"/>
+  <text x="320" y="24" text-anchor="middle" fill="#495057">0° (vertical, normal incidence)</text>
+  <line x1="60" y1="300" x2="580" y2="300" stroke="#ced4da" stroke-dasharray="3 5"/>
+  <text x="585" y="296" fill="#868e96" font-size="12">90°</text>
+  <text x="38" y="296" fill="#868e96" font-size="12">90°</text>
+
+  <!-- source arm X at 45 deg to the left -->
+  <line x1="320" y1="300" x2="150" y2="130" stroke="#1971c2" stroke-opacity="0.35" stroke-width="10" stroke-linecap="round"/>
+  <rect x="122" y="102" width="40" height="40" rx="6" fill="#1971c2" transform="rotate(45 142 122)"/>
+  <text x="30" y="62" fill="#1971c2" font-weight="bold">X: source arm</text>
+  <text x="30" y="80" fill="#1971c2" font-size="12">lamp fibre + collimating lens</text>
+
+  <!-- detector arm Y at 45 deg to the right -->
+  <line x1="320" y1="300" x2="490" y2="130" stroke="#2f9e44" stroke-opacity="0.35" stroke-width="10" stroke-linecap="round"/>
+  <rect x="478" y="102" width="40" height="40" rx="6" fill="#2f9e44" transform="rotate(-45 498 122)"/>
+  <text x="610" y="62" text-anchor="end" fill="#2f9e44" font-weight="bold">Y: detector arm</text>
+  <text x="610" y="80" text-anchor="end" fill="#2f9e44" font-size="12">lens + fibre to spectrometer</text>
+
+  <!-- light path -->
+  <line x1="190" y1="170" x2="312" y2="292" stroke="#d9480f" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="328" y1="292" x2="450" y2="170" stroke="#d9480f" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- angle arcs -->
+  <path d="M320,220 A80,80 0 0,0 263.4,243.4" fill="none" stroke="#1971c2" stroke-width="2"/>
+  <text x="270" y="212" fill="#1971c2">θx</text>
+  <path d="M320,220 A80,80 0 0,1 376.6,243.4" fill="none" stroke="#2f9e44" stroke-width="2"/>
+  <text x="352" y="212" fill="#2f9e44">θy</text>
+
+  <text x="320" y="372" text-anchor="middle" fill="#495057" font-size="12">Specular: θx = θy, so the arms are 2θ apart. Uncoupled: each arm set independently.</text>
+</svg>

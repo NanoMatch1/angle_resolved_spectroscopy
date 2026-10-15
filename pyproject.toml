@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "angle-resolved-spectrometer"
+version = "0.2.0"
+description = "Control and analysis software for a home-built angle-resolved reflectance spectrometer"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Samuel Brooke" }]
+requires-python = ">=3.9"
+dependencies = ["numpy", "matplotlib", "pyserial"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools]
+packages = ["angle_resolved_spectrometer", "angle_resolved_spectrometer.motion", "angle_resolved_spectrometer.analysis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
